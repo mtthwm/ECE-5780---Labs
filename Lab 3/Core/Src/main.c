@@ -54,6 +54,9 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+/*
+A handler for our timer3 events, so that the light turns on and off.
+*/
 void TIM2_IRQHandler () {
 	GPIOC->ODR ^= GPIO_ODR_8;
 	GPIOC->ODR ^= GPIO_ODR_9;
@@ -80,10 +83,12 @@ int main(void)
 
   /* USER CODE BEGIN Init */
 	
+	// Enable the RCC clock for any peripherals that need it.
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 	RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
 	RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
 
+	// Configure the modes for the onboard LEDs
 	GPIOC->MODER &= ~(GPIO_MODER_MODER6_Msk);
 	GPIOC->MODER &= ~(GPIO_MODER_MODER7_Msk);
 	GPIOC->MODER &= ~(GPIO_MODER_MODER8_Msk);
@@ -138,6 +143,7 @@ int main(void)
 	
 	NVIC_EnableIRQ(TIM2_IRQn);
 	
+	// Enable one of the LEDs so we can use a bitwise XOR to toggle the lights later.
 	GPIOC->ODR |= GPIO_ODR_9;
 
   /* USER CODE END Init */
