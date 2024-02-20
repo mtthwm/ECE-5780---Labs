@@ -114,8 +114,8 @@ int main(void)
 	TIM2->CR1 |= TIM_CR1_CEN; // Enable Timer
 	
 	// Setting up timer 3 to 800Hz
-	TIM3->PSC = 79;
-	TIM3->ARR = 125;
+	TIM3->PSC = 100;
+	TIM3->ARR = 100;
 	// Set channels as output
 	TIM3->CCMR1 &= ~TIM_CCMR1_CC1S_Msk;
 	TIM3->CCMR1 &= ~TIM_CCMR1_CC2S_Msk;
@@ -132,8 +132,8 @@ int main(void)
 	TIM3->CCER |= TIM_CCER_CC1E;
 	TIM3->CCER |= TIM_CCER_CC2E;
 	// Set duty-cycle to 20%
-	TIM3->CCR1 = 25;
-	TIM3->CCR2 = 25;
+	TIM3->CCR1 = 100;
+	TIM3->CCR2 = 100;
 	
 	GPIOC->AFR[0] &= ~(GPIO_AFRL_AFSEL6_Msk); // Use Alternate function A0 (Channel 1 of TIM3)
 	GPIOC->AFR[0] &= ~(GPIO_AFRL_AFSEL7_Msk); // Use Alternate function A0 (Channel 2 of TIM3)
