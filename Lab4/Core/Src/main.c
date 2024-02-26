@@ -94,6 +94,15 @@ int main(void)
 	GPIOB->AFR[0] |= GPIO_AFRH_AFSEL11_Msk;
 	GPIOB->AFR[0] |= (4 << GPIO_AFRH_AFSEL11_Pos);
 	
+	// Enable USART TX and RX
+	USART3->CR1 |= USART_CR1_TE;
+	USART3->CR1 |= USART_CR1_RE;
+	
+	// Set the USART Baud Rate to 115200 bit/sec
+	USART3->BRR = (HAL_RCC_GetHCLKFreq()/115200);
+	
+	// Enable USART. Config vars become readonly!
+	USART3->CR1 |= USART_CR1_UE;
 
   /* USER CODE END SysInit */
 
@@ -107,6 +116,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
 
     /* USER CODE BEGIN 3 */
   }
