@@ -132,8 +132,8 @@ int main(void)
 	TIM3->CCER |= TIM_CCER_CC1E;
 	TIM3->CCER |= TIM_CCER_CC2E;
 	// Set duty-cycle to 20%
-	TIM3->CCR1 = 100;
-	TIM3->CCR2 = 100;
+	TIM3->CCR1 = 80;
+	TIM3->CCR2 = 80;
 	
 	GPIOC->AFR[0] &= ~(GPIO_AFRL_AFSEL6_Msk); // Use Alternate function A0 (Channel 1 of TIM3)
 	GPIOC->AFR[0] &= ~(GPIO_AFRL_AFSEL7_Msk); // Use Alternate function A0 (Channel 2 of TIM3)
