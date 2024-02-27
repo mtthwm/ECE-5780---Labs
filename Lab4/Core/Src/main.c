@@ -56,6 +56,11 @@ void SystemClock_Config(void);
 
 /* USER CODE END 0 */
 
+#define RX_BUFF_SIZE 2
+
+static char rx_chars[RX_BUFF_SIZE];
+static int rx_i = 0;
+
 char usart_read_char () {
 	int wait = 1;
 	while (wait) {
@@ -79,8 +84,8 @@ void usart_transmit_char (char c) {
 			wait = 0;
 		}
 	} // Wait until the register is empty for transmission
-	
-	USART3->TDR = c;	
+
+	USART3->TDR = c;
 }
 
 void usart_transmit_str (char* s) {
@@ -91,6 +96,15 @@ void usart_transmit_str (char* s) {
 	} while (s[i] != '\0');
 	
 	usart_transmit_char('\0');
+}
+
+void USART3_4_IRQHandler () {
+	char received = USART3->RDR;
+	if (rx_i >= RX_BUFF_SIZE || rx_i < 0) {
+		return;
+	}
+	rx_chars[rx_i] = received;
+	rx_i++;
 }
 
 /**
@@ -152,6 +166,7 @@ int main(void)
 	---------------------- LED CONFIG --------------------------
 	*/
 	
+	// Set the mode of the GPIO pins to use an alternate function
 	GPIOB->MODER &= ~(GPIO_MODER_MODER10_Msk);
 	GPIOB->MODER &= ~(GPIO_MODER_MODER11_Msk);
 	GPIOB->MODER |= (2 << GPIO_MODER_MODER10_Pos);
@@ -170,6 +185,16 @@ int main(void)
 	// Set the USART Baud Rate to 115200 bit/sec
 	USART3->BRR = (HAL_RCC_GetHCLKFreq()/115200);
 	
+	// Enable RXNE Interrupt
+	USART3->CR1 |= USART_CR1_RXNEIE;
+	
+	// Configure interrupt handler for RXNE
+	NVIC_EnableIRQ(USART3_4_IRQn);
+	
+	// Configure interrupt priorities
+	NVIC_SetPriority(USART3_4_IRQn, 1);
+	NVIC_SetPriority(SysTick_IRQn, 0);
+	
 	// Enable USART. Config vars become readonly!
 	USART3->CR1 |= USART_CR1_UE;
 
@@ -178,7 +203,7 @@ int main(void)
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
 	
-	char received_chars[2];
+	usart_transmit_str("CMD?\n");
 	
   /* USER CODE END 2 */
 
@@ -188,33 +213,42 @@ int main(void)
   {
     /* USER CODE END WHILE */
 		HAL_Delay(2);
-		
-		usart_transmit_str("CMD?\n");
-		usart_read_str(received_chars, 2);
-		uint32_t led_to_modify;
-		if (received_chars[0] == 'r') {
-			led_to_modify = GPIO_ODR_6;
-		} else if (received_chars[0] == 'g') {
-			led_to_modify = GPIO_ODR_9;
-		} else if (received_chars[0] == 'b') {
-			led_to_modify = GPIO_ODR_7;
-		} else if (received_chars[0] == 'o') {
-			led_to_modify = GPIO_ODR_8;
-		} else {
-			usart_transmit_str("INVALID COMMAND\n");
-			continue;
+						
+		if (rx_i == RX_BUFF_SIZE) {
+			uint8_t has_error = 0;
+			uint32_t led_to_modify;
+			if (rx_chars[0] == 'r') {
+				led_to_modify = GPIO_ODR_6;
+			} else if (rx_chars[0] == 'g') {
+				led_to_modify = GPIO_ODR_9;
+			} else if (rx_chars[0] == 'b') {
+				led_to_modify = GPIO_ODR_7;
+			} else if (rx_chars[0] == 'o') {
+				led_to_modify = GPIO_ODR_8;
+			} else {
+				has_error = 1;
+			}
+			
+			if (!has_error) {
+				if (rx_chars[1] == '0') {
+					GPIOC->ODR &= ~led_to_modify;
+				} else if (rx_chars[1] == '1') {
+					GPIOC->ODR |= led_to_modify;
+				} else if (rx_chars[1] == '2') {
+					GPIOC->ODR ^= led_to_modify;
+				} else {
+					has_error = 1;
+				}
+			}
+
+			if (has_error) {
+				usart_transmit_str("INVALID COMMAND\n");
+			}
+			
+			rx_i = 0;
+			usart_transmit_str("CMD?\n");
 		}
-		
-		if (received_chars[1] == '0') {
-			GPIOC->ODR &= ~led_to_modify;
-		} else if (received_chars[1] == '1') {
-			GPIOC->ODR |= led_to_modify;
-		} else if (received_chars[1] == '2') {
-			GPIOC->ODR ^= led_to_modify;
-		} else {
-			usart_transmit_str("INVALID COMMAND\n");
-			continue;
-		}
+
 		
     /* USER CODE BEGIN 3 */
   }
