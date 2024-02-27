@@ -56,6 +56,27 @@ void SystemClock_Config(void);
 
 /* USER CODE END 0 */
 
+void usart_transmit_char (char c) {
+	int wait = 1;
+	while (wait) {
+		if ((USART3->ISR & USART_ISR_TXE_Msk)) {
+			wait = 0;
+		}
+	} // Wait until the register is empty for transmission
+	
+	USART3->TDR = c;	
+}
+
+void usart_transmit_str (char* s) {
+	int i = 0;
+	do {
+		usart_transmit_char(s[i]);
+		i++;
+	} while (s[i] != '\0');
+	
+	usart_transmit_char('\0');
+}
+
 /**
   * @brief  The application entry point.
   * @retval int
@@ -80,19 +101,51 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 	
-	RCC->APB1ENR |= RCC_APB1ENR_USART3EN;
+	// Enable the clock to each peripheral
+	RCC->APB1ENR |= RCC_APB1ENR_USART3EN;	
+	RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+	RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
 	
-	// Set GPIO Pins PB10 and PB11 to alternate function mode
-	GPIOB->MODER |= ~GPIO_MODER_MODER10_Msk;
-	GPIOB->MODER |= GPIO_MODER_MODER10_1;
-	GPIOB->MODER |= ~GPIO_MODER_MODER11_Msk;
-	GPIOB->MODER |= GPIO_MODER_MODER11_1;
+	/*
+	------------------------- LED CONFIG --------------------------
+	*/
+	GPIOC->MODER &= ~(GPIO_MODER_MODER6_Msk);
+	GPIOC->MODER &= ~(GPIO_MODER_MODER7_Msk);
+	GPIOC->MODER &= ~(GPIO_MODER_MODER8_Msk);
+	GPIOC->MODER &= ~(GPIO_MODER_MODER9_Msk);
+	GPIOC->MODER |= GPIO_MODER_MODER6_0;
+	GPIOC->MODER |= GPIO_MODER_MODER7_0;
+	GPIOC->MODER |= GPIO_MODER_MODER8_0;
+	GPIOC->MODER |= GPIO_MODER_MODER9_0;
 	
-	// Set GPIO Pins PB10 and PB11 to use alternate function AF4
-	GPIOB->AFR[0] |= GPIO_AFRH_AFSEL10_Msk;
-	GPIOB->AFR[0] |= (4 << GPIO_AFRH_AFSEL10_Pos);
-	GPIOB->AFR[0] |= GPIO_AFRH_AFSEL11_Msk;
-	GPIOB->AFR[0] |= (4 << GPIO_AFRH_AFSEL11_Pos);
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_6);
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_7);
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_8);
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_9);
+	
+	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR6_Msk);
+	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR7_Msk);
+	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR8_Msk);
+	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR9_Msk);
+	
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR6_Msk);
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR7_Msk);
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR8_Msk);
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR9_Msk);
+	/*
+	---------------------- LED CONFIG --------------------------
+	*/
+	
+	GPIOB->MODER &= ~(GPIO_MODER_MODER10_Msk);
+	GPIOB->MODER &= ~(GPIO_MODER_MODER11_Msk);
+	GPIOB->MODER |= (2 << GPIO_MODER_MODER10_Pos);
+	GPIOB->MODER |= (2 << GPIO_MODER_MODER11_Pos);
+	
+	// Set GPIO Pins PB10 and PB11 to use alternate function AF4: USART3
+	GPIOB->AFR[1] &= ~GPIO_AFRH_AFSEL10_Msk;
+	GPIOB->AFR[1] |= (GPIO_AF4_USART3 << GPIO_AFRH_AFSEL10_Pos); // TX
+	GPIOB->AFR[1] &= ~GPIO_AFRH_AFSEL11_Msk;
+	GPIOB->AFR[1] |= (GPIO_AF4_USART3 << GPIO_AFRH_AFSEL11_Pos); // RX
 	
 	// Enable USART TX and RX
 	USART3->CR1 |= USART_CR1_TE;
@@ -116,8 +169,10 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
-
+		HAL_Delay(1000);
+		
+		usart_transmit_str("UR DUMB");
+		
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
