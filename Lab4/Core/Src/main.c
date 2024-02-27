@@ -189,6 +189,7 @@ int main(void)
     /* USER CODE END WHILE */
 		HAL_Delay(2);
 		
+		usart_transmit_str("CMD?\n");
 		usart_read_str(received_chars, 2);
 		uint32_t led_to_modify;
 		if (received_chars[0] == 'r') {
@@ -201,6 +202,7 @@ int main(void)
 			led_to_modify = GPIO_ODR_8;
 		} else {
 			usart_transmit_str("INVALID COMMAND\n");
+			continue;
 		}
 		
 		if (received_chars[1] == '0') {
@@ -211,6 +213,7 @@ int main(void)
 			GPIOC->ODR ^= led_to_modify;
 		} else {
 			usart_transmit_str("INVALID COMMAND\n");
+			continue;
 		}
 		
     /* USER CODE BEGIN 3 */
