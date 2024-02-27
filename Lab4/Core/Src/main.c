@@ -66,6 +66,12 @@ char usart_read_char () {
 	return USART3->RDR;
 }
 
+void usart_read_str (char* result, int len) {
+	for (int i = 0; i < len; i++) {
+		result[i] = usart_read_char();
+	} 
+}
+
 void usart_transmit_char (char c) {
 	int wait = 1;
 	while (wait) {
@@ -172,7 +178,7 @@ int main(void)
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
 	
-	char received_char;
+	char received_chars[2];
 	
   /* USER CODE END 2 */
 
@@ -183,18 +189,28 @@ int main(void)
     /* USER CODE END WHILE */
 		HAL_Delay(2);
 		
-		received_char = usart_read_char();
-		
-		if (received_char == 'r') {
-			GPIOC->ODR ^= GPIO_ODR_6;
-		} else if (received_char == 'g') {
-			GPIOC->ODR ^= GPIO_ODR_9;
-		} else if (received_char == 'b') {
-			GPIOC->ODR ^= GPIO_ODR_7;
-		} else if (received_char == 'o') {
-			GPIOC->ODR ^= GPIO_ODR_8;
+		usart_read_str(received_chars, 2);
+		uint32_t led_to_modify;
+		if (received_chars[0] == 'r') {
+			led_to_modify = GPIO_ODR_6;
+		} else if (received_chars[0] == 'g') {
+			led_to_modify = GPIO_ODR_9;
+		} else if (received_chars[0] == 'b') {
+			led_to_modify = GPIO_ODR_7;
+		} else if (received_chars[0] == 'o') {
+			led_to_modify = GPIO_ODR_8;
 		} else {
-				usart_transmit_str("Invalid LED name");
+			usart_transmit_str("INVALID COMMAND\n");
+		}
+		
+		if (received_chars[1] == '0') {
+			GPIOC->ODR &= ~led_to_modify;
+		} else if (received_chars[1] == '1') {
+			GPIOC->ODR |= led_to_modify;
+		} else if (received_chars[1] == '2') {
+			GPIOC->ODR ^= led_to_modify;
+		} else {
+			usart_transmit_str("INVALID COMMAND\n");
 		}
 		
     /* USER CODE BEGIN 3 */
