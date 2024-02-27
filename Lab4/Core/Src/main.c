@@ -107,6 +107,109 @@ void USART3_4_IRQHandler () {
 	rx_i++;
 }
 
+void handle_light_commands () {
+	if (rx_i == RX_BUFF_SIZE) {
+			uint8_t has_error = 0;
+			uint32_t led_to_modify;
+			if (rx_chars[0] == 'r') {
+					led_to_modify = GPIO_ODR_6;
+			} else if (rx_chars[0] == 'g') {
+					led_to_modify = GPIO_ODR_9;
+			} else if (rx_chars[0] == 'b') {
+					led_to_modify = GPIO_ODR_7;
+			} else if (rx_chars[0] == 'o') {
+					led_to_modify = GPIO_ODR_8;
+			} else {
+					has_error = 1;
+			}
+			
+			if (!has_error) {
+					if (rx_chars[1] == '0') {
+							GPIOC->ODR &= ~led_to_modify;
+					} else if (rx_chars[1] == '1') {
+							GPIOC->ODR |= led_to_modify;
+					} else if (rx_chars[1] == '2') {
+							GPIOC->ODR ^= led_to_modify;
+					} else {
+							has_error = 1;
+					}
+			}
+
+			if (has_error) {
+					usart_transmit_str("INVALID COMMAND\n");
+			}
+			
+			rx_i = 0;
+			usart_transmit_str("CMD?\n");
+	}
+}
+
+void config_red () {
+	GPIOC->MODER &= ~(GPIO_MODER_MODER6_Msk);
+	GPIOC->MODER |= GPIO_MODER_MODER6_0;
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_6);
+	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR6_Msk);
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR6_Msk);
+}
+void config_blue () {
+	GPIOC->MODER &= ~(GPIO_MODER_MODER7_Msk);
+	GPIOC->MODER |= GPIO_MODER_MODER7_0;
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_7);
+	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR7_Msk);
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR7_Msk);
+}
+void config_orange () {
+	GPIOC->MODER &= ~(GPIO_MODER_MODER8_Msk);
+	GPIOC->MODER |= GPIO_MODER_MODER8_0;
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_8);
+	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR8_Msk);
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR8_Msk);
+}
+void config_green () {
+	GPIOC->MODER &= ~(GPIO_MODER_MODER9_Msk);
+	GPIOC->MODER |= GPIO_MODER_MODER9_0;
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_9);
+	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR9_Msk);
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR9_Msk);
+}
+
+/**
+	* @brief Configures USART with PB10=RX, PB11=TX
+	*/
+void config_usart (uint32_t baudrate) {
+	// Set the mode of the GPIO pins to use an alternate function
+	GPIOB->MODER &= ~(GPIO_MODER_MODER10_Msk);
+	GPIOB->MODER &= ~(GPIO_MODER_MODER11_Msk);
+	GPIOB->MODER |= (2 << GPIO_MODER_MODER10_Pos);
+	GPIOB->MODER |= (2 << GPIO_MODER_MODER11_Pos);
+	
+	// Set GPIO Pins PB10 and PB11 to use alternate function AF4: USART3
+	GPIOB->AFR[1] &= ~GPIO_AFRH_AFSEL10_Msk;
+	GPIOB->AFR[1] |= (GPIO_AF4_USART3 << GPIO_AFRH_AFSEL10_Pos); // TX
+	GPIOB->AFR[1] &= ~GPIO_AFRH_AFSEL11_Msk;
+	GPIOB->AFR[1] |= (GPIO_AF4_USART3 << GPIO_AFRH_AFSEL11_Pos); // RX
+	
+	// Enable USART TX and RX
+	USART3->CR1 |= USART_CR1_TE;
+	USART3->CR1 |= USART_CR1_RE;
+	
+	// Set the USART Baud Rate to 115200 bit/sec
+	USART3->BRR = (HAL_RCC_GetHCLKFreq()/baudrate);
+	
+	// Enable RXNE Interrupt
+	USART3->CR1 |= USART_CR1_RXNEIE;
+	
+	// Configure interrupt handler for RXNE
+	NVIC_EnableIRQ(USART3_4_IRQn);
+	
+	// Configure interrupt priorities
+	NVIC_SetPriority(USART3_4_IRQn, 1);
+	NVIC_SetPriority(SysTick_IRQn, 0);
+	
+	// Enable USART. Config vars become readonly!
+	USART3->CR1 |= USART_CR1_UE;
+}
+
 /**
   * @brief  The application entry point.
   * @retval int
@@ -136,67 +239,13 @@ int main(void)
 	RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
 	RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
 	
-	/*
-	------------------------- LED CONFIG --------------------------
-	*/
-	GPIOC->MODER &= ~(GPIO_MODER_MODER6_Msk);
-	GPIOC->MODER &= ~(GPIO_MODER_MODER7_Msk);
-	GPIOC->MODER &= ~(GPIO_MODER_MODER8_Msk);
-	GPIOC->MODER &= ~(GPIO_MODER_MODER9_Msk);
-	GPIOC->MODER |= GPIO_MODER_MODER6_0;
-	GPIOC->MODER |= GPIO_MODER_MODER7_0;
-	GPIOC->MODER |= GPIO_MODER_MODER8_0;
-	GPIOC->MODER |= GPIO_MODER_MODER9_0;
+	// LED setup
+	config_red();
+	config_blue();
+	config_orange();
+	config_green();
 	
-	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_6);
-	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_7);
-	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_8);
-	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_9);
-	
-	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR6_Msk);
-	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR7_Msk);
-	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR8_Msk);
-	GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR9_Msk);
-	
-	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR6_Msk);
-	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR7_Msk);
-	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR8_Msk);
-	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR9_Msk);
-	/*
-	---------------------- LED CONFIG --------------------------
-	*/
-	
-	// Set the mode of the GPIO pins to use an alternate function
-	GPIOB->MODER &= ~(GPIO_MODER_MODER10_Msk);
-	GPIOB->MODER &= ~(GPIO_MODER_MODER11_Msk);
-	GPIOB->MODER |= (2 << GPIO_MODER_MODER10_Pos);
-	GPIOB->MODER |= (2 << GPIO_MODER_MODER11_Pos);
-	
-	// Set GPIO Pins PB10 and PB11 to use alternate function AF4: USART3
-	GPIOB->AFR[1] &= ~GPIO_AFRH_AFSEL10_Msk;
-	GPIOB->AFR[1] |= (GPIO_AF4_USART3 << GPIO_AFRH_AFSEL10_Pos); // TX
-	GPIOB->AFR[1] &= ~GPIO_AFRH_AFSEL11_Msk;
-	GPIOB->AFR[1] |= (GPIO_AF4_USART3 << GPIO_AFRH_AFSEL11_Pos); // RX
-	
-	// Enable USART TX and RX
-	USART3->CR1 |= USART_CR1_TE;
-	USART3->CR1 |= USART_CR1_RE;
-	
-	// Set the USART Baud Rate to 115200 bit/sec
-	USART3->BRR = (HAL_RCC_GetHCLKFreq()/115200);
-	
-	// Enable RXNE Interrupt
-	USART3->CR1 |= USART_CR1_RXNEIE;
-	
-	// Configure interrupt handler for RXNE
-	NVIC_EnableIRQ(USART3_4_IRQn);
-	
-	// Configure interrupt priorities
-	NVIC_SetPriority(USART3_4_IRQn, 1);
-	NVIC_SetPriority(SysTick_IRQn, 0);
-	
-	// Enable USART. Config vars become readonly!
-	USART3->CR1 |= USART_CR1_UE;
+	config_usart(115200);
 
   /* USER CODE END SysInit */
 
@@ -214,41 +263,7 @@ int main(void)
     /* USER CODE END WHILE */
 		HAL_Delay(2);
 						
-		if (rx_i == RX_BUFF_SIZE) {
-			uint8_t has_error = 0;
-			uint32_t led_to_modify;
-			if (rx_chars[0] == 'r') {
-				led_to_modify = GPIO_ODR_6;
-			} else if (rx_chars[0] == 'g') {
-				led_to_modify = GPIO_ODR_9;
-			} else if (rx_chars[0] == 'b') {
-				led_to_modify = GPIO_ODR_7;
-			} else if (rx_chars[0] == 'o') {
-				led_to_modify = GPIO_ODR_8;
-			} else {
-				has_error = 1;
-			}
-			
-			if (!has_error) {
-				if (rx_chars[1] == '0') {
-					GPIOC->ODR &= ~led_to_modify;
-				} else if (rx_chars[1] == '1') {
-					GPIOC->ODR |= led_to_modify;
-				} else if (rx_chars[1] == '2') {
-					GPIOC->ODR ^= led_to_modify;
-				} else {
-					has_error = 1;
-				}
-			}
-
-			if (has_error) {
-				usart_transmit_str("INVALID COMMAND\n");
-			}
-			
-			rx_i = 0;
-			usart_transmit_str("CMD?\n");
-		}
-
+		handle_light_commands();
 		
     /* USER CODE BEGIN 3 */
   }
