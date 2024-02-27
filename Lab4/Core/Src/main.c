@@ -56,6 +56,16 @@ void SystemClock_Config(void);
 
 /* USER CODE END 0 */
 
+char usart_read_char () {
+	int wait = 1;
+	while (wait) {
+		if ((USART3->ISR & USART_ISR_RXNE_Msk)) {
+			wait = 0;
+		}
+	} // Wait until the register is empty for transmission
+	return USART3->RDR;
+}
+
 void usart_transmit_char (char c) {
 	int wait = 1;
 	while (wait) {
@@ -161,7 +171,9 @@ int main(void)
 
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
-
+	
+	char received_char;
+	
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -169,9 +181,21 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-		HAL_Delay(1000);
+		HAL_Delay(2);
 		
-		usart_transmit_str("UR DUMB");
+		received_char = usart_read_char();
+		
+		if (received_char == 'r') {
+			GPIOC->ODR ^= GPIO_ODR_6;
+		} else if (received_char == 'g') {
+			GPIOC->ODR ^= GPIO_ODR_9;
+		} else if (received_char == 'b') {
+			GPIOC->ODR ^= GPIO_ODR_7;
+		} else if (received_char == 'o') {
+			GPIOC->ODR ^= GPIO_ODR_8;
+		} else {
+				usart_transmit_str("Invalid LED name");
+		}
 		
     /* USER CODE BEGIN 3 */
   }
