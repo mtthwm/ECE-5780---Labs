@@ -105,7 +105,7 @@ int main(void)
 	// Enable clock
 	RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
 	RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
-	
+	RCC->APB1ENR |= RCC_APB1ENR_I2C2EN;
 	
 	// Set GPIO 11 and 13 to use their alternate function mode
 	GPIOB->MODER &= ~(GPIO_MODER_MODER11_Msk);
@@ -137,6 +137,14 @@ int main(void)
 	GPIOB->ODR |= GPIO_ODR_14;
 	GPIOC->ODR |= GPIO_ODR_0;
 	
+	// Set the I2C2 clock speed to 100kHz
+	I2C2->TIMINGR |= I2C_TIMINGR_PRESC;
+	I2C2->TIMINGR |= (0x13 << I2C_TIMINGR_SCLL_Pos);
+	I2C2->TIMINGR |= (0xF << I2C_TIMINGR_SCLH_Pos);
+	I2C2->TIMINGR |= (0x2 << I2C_TIMINGR_SCLDEL_Pos);
+
+	// Enable the I2C2 Peripheral
+	I2C2->CR1 |= I2C_CR1_PE;
 
   /* USER CODE END Init */
 
