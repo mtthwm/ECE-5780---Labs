@@ -150,11 +150,11 @@ int main(void)
 	GPIOB->AFR[1] &= ~GPIO_AFRH_AFSEL13_Msk;
 	GPIOB->AFR[1] |= (5 << GPIO_AFRH_AFSEL13_Pos); // SCL
 	
-	// Configure Pullup Resistors for SDA and SCL
-	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR11_Msk);
-	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR13_Msk);
-	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR11_0;
-	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR13_0;
+	// // Configure Pullup Resistors for SDA and SCL
+	// GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR11_Msk);
+	// GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR13_Msk);
+	// GPIOB->PUPDR |= GPIO_PUPDR_PUPDR11_0;
+	// GPIOB->PUPDR |= GPIO_PUPDR_PUPDR13_0;
 	
 	// Set GPIO PB14 and PC0 to output mode
 	GPIOB->MODER &= ~(GPIO_MODER_MODER14_Msk);
