@@ -99,15 +99,99 @@ void toggle_green () {
 	GPIOC->ODR ^= GPIO_ODR_9;
 }
 
-void i2c_write (char addr, char chip_id_addr, int num_bytes, char* data) {
+int i2c_write (char follower, int num_bytes, char* data) {
 	// Prepare a write operation
-	I2C2->CR2 |= (addr << I2C_CR2_SADD_Pos); // Select follower address
-	I2C2->TXDR = chip_id_addr;
+	I2C2->CR2 |= (follower << (I2C_CR2_SADD_Pos + 1)); // Select follower address
 	I2C2->CR2 |= (num_bytes << I2C_CR2_NBYTES_Pos); // Set the number of bytes
 	I2C2->CR2 &= ~I2C_CR2_RD_WRN; // Set to write mode
 	I2C2->CR2 |= I2C_CR2_START; // Start the transaction
 	
+	// Wait until we get either a NACK or a confirmation
+	while (1) {
+		if (I2C2->ISR & I2C_ISR_TXIS) {
+			break;
+		}
+		if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
+			return 0;
+		}
+		HAL_Delay(1);
+	};
 	
+	for (int i = 0; i < num_bytes; i++) {
+		// Input data to send
+		I2C2->TXDR = data[i];
+		
+		// Wait until we receive confirmation that the data was sent.
+		while (1) {
+			if (I2C2->ISR & I2C_ISR_TC) {
+				return 0;
+			}
+			HAL_Delay(1);
+		}
+	}
+	
+	return 1;
+}
+
+int i2c_transaction () {
+	// Prepare a write operation
+	I2C2->CR2 |= (0x69 << (I2C_CR2_SADD_Pos + 1)); // Select follower address
+	I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos); // Set the number of bytes
+	I2C2->CR2 &= ~I2C_CR2_RD_WRN; // Set to write mode
+	I2C2->CR2 |= I2C_CR2_START; // Start the transaction
+	
+	// Wait until we get either a NACK or a confirmation
+	while (1) {
+		if (I2C2->ISR & I2C_ISR_TXIS) {
+			break;
+		}
+		if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
+			toggle_red();
+			return 0;
+		}
+		HAL_Delay(1);
+	};
+	
+	toggle_blue();
+		
+	// Send the address of the who am i register
+	I2C2->TXDR = 0x0F;
+	
+	// Wait until we receive confirmation that the data was sent.
+	while (1) {
+		if (I2C2->ISR & I2C_ISR_TC) {
+			break;
+		}
+		HAL_Delay(1);
+	}
+	
+	toggle_orange();
+	
+	// Prepare a read operation
+	I2C2->CR2 |= (0x69 << (I2C_CR2_SADD_Pos + 1)); // Select follower address
+	I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos); // Set the number of bytes
+	I2C2->CR2 |= I2C_CR2_RD_WRN; // Set to read mode
+	I2C2->CR2 |= I2C_CR2_START; // Start the transaction
+	
+	// Wait until we get either a NACK or a confirmation
+	while (1) {
+		if (I2C2->ISR & I2C_ISR_RXNE) {
+			break;
+		}
+		if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
+			toggle_red();
+			return 0;
+		}
+		HAL_Delay(1);
+	};
+	
+	toggle_green();
+	
+	#define GYRO_CTRL_REG1 0x20;
+	
+	
+	
+	return 1;
 }
 
 /* USER CODE END 0 */
@@ -202,29 +286,11 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	
-	// Prepare a write operation
-	I2C2->CR2 |= (0x69 << I2C_CR2_SADD_Pos); // Select follower address
-	I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos); // Set the number of bytes
-	I2C2->CR2 &= ~I2C_CR2_RD_WRN; // Set to write mode
-	I2C2->CR2 |= I2C_CR2_START; // Start the transaction
-	
-	// Wait until we get either a NACK or a confirmation
-	while (!(I2C2->ISR & I2C_ISR_NACKF_Msk) && !(I2C2->ISR & I2C_ISR_TXIS)) {
-		HAL_Delay(1);
-	};
-		
-	if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
-		toggle_red();
-	} else {
-		toggle_green();
-	}
+	i2c_transaction();
 	
   while (1)
   {
     /* USER CODE END WHILE */
-		
-		toggle_orange();
-		HAL_Delay(1000);
 
     /* USER CODE BEGIN 3 */
   }

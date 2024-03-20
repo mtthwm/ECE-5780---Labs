@@ -182,10 +182,6 @@ void config_usart (uint32_t baudrate) {
 	GPIOB->MODER &= ~(GPIO_MODER_MODER11_Msk);
 	GPIOB->MODER |= (2 << GPIO_MODER_MODER10_Pos);
 	GPIOB->MODER |= (2 << GPIO_MODER_MODER11_Pos);
-	
-	// Set pins 11 and 13 to open drain
-	GPIOB->OTYPER |= GPIO_OTYPER_OT_11;
-	GPIOB->OTYPER |= GPIO_OTYPER_OT_13;
 
 	
 	// Set GPIO Pins PB10 and PB11 to use alternate function AF4: USART3
