@@ -62,8 +62,18 @@ void config_red () {
 	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR6_Msk);
 	GPIOC->ODR &= ~GPIO_ODR_6;
 }
-void toggle_red () {
-	GPIOC->ODR ^= GPIO_ODR_6;
+void toggle_red (char mode) {
+	switch (mode) {
+		case 2:
+			GPIOC->ODR ^= GPIO_ODR_6;
+			break;
+		case 1:
+			GPIOC->ODR |= GPIO_ODR_6;
+			break;
+		case 0:
+			GPIOC->ODR &= ~GPIO_ODR_6;
+			break;
+	}
 }
 void config_blue () {
 	GPIOC->MODER &= ~(GPIO_MODER_MODER7_Msk);
@@ -73,8 +83,18 @@ void config_blue () {
 	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR7_Msk);
 	GPIOC->ODR &= ~GPIO_ODR_7;
 }
-void toggle_blue () {
-	GPIOC->ODR ^= GPIO_ODR_7;
+void toggle_blue (char mode) {
+	switch (mode) {
+		case 2:
+			GPIOC->ODR ^= GPIO_ODR_7;
+			break;
+		case 1:
+			GPIOC->ODR |= GPIO_ODR_7;
+			break;
+		case 0:
+			GPIOC->ODR &= ~GPIO_ODR_7;
+			break;
+	}
 }
 void config_orange () {
 	GPIOC->MODER &= ~(GPIO_MODER_MODER8_Msk);
@@ -84,8 +104,18 @@ void config_orange () {
 	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR8_Msk);
 	GPIOC->ODR &= ~GPIO_ODR_8;
 }
-void toggle_orange () {
-	GPIOC->ODR ^= GPIO_ODR_8;
+void toggle_orange (char mode) {
+	switch (mode) {
+		case 2:
+			GPIOC->ODR ^= GPIO_ODR_8;
+			break;
+		case 1:
+			GPIOC->ODR |= GPIO_ODR_8;
+			break;
+		case 0:
+			GPIOC->ODR &= ~GPIO_ODR_8;
+			break;
+	}
 }
 void config_green () {
 	GPIOC->MODER &= ~(GPIO_MODER_MODER9_Msk);
@@ -95,8 +125,18 @@ void config_green () {
 	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR9_Msk);
 	GPIOC->ODR &= ~GPIO_ODR_9;
 }
-void toggle_green () {
-	GPIOC->ODR ^= GPIO_ODR_9;
+void toggle_green (char mode) {
+	switch (mode) {
+		case 2:
+			GPIOC->ODR ^= GPIO_ODR_9;
+			break;
+		case 1:
+			GPIOC->ODR |= GPIO_ODR_9;
+			break;
+		case 0:
+			GPIOC->ODR &= ~GPIO_ODR_9;
+			break;
+	}
 }
 
 #define GYRO_ADDR 0x69
@@ -108,6 +148,8 @@ void toggle_green () {
 #define GYRO_OUT_Y_H_REG 0x2B
 
 #define MAX_ITERATIONS 100
+
+#define TILT_THRESHOLD 0x0FFF
 
 char i2c_write (char follower, char num_bytes, char* data) {
 	for (char i = 0; i < num_bytes; i++) {
@@ -208,11 +250,54 @@ void get_gyro_data (int16_t* x, int16_t* y) {
 	char out_buff[4];
 	char status = i2c_read(GYRO_ADDR, 4, out_buff);
 	if (!status) {
-		toggle_red();
+		toggle_red(1);
 	}
 	
 	*x = (out_buff[1] << 8) | out_buff[0];
 	*y = (out_buff[3] << 8) | out_buff[2];
+}
+
+int gyro_ok;
+	
+int16_t rot_x;
+int16_t rot_y;
+
+void update_leds_from_gyro_data () {
+	if (gyro_ok) {
+		get_gyro_data(&rot_x, &rot_y);
+		if ((rot_x - TILT_THRESHOLD) > 0) {
+			toggle_green(1);
+		}
+	}
+}
+
+void rate_group_100ms () {
+	update_leds_from_gyro_data();
+}
+
+void rate_group_1000ms () {
+	toggle_blue(2);
+}
+
+void handle_rate_groups () {
+	static int count100ms = 0;
+	static int count1000ms = 0;
+	
+	if (count100ms == 100) {
+		rate_group_100ms();
+		count100ms = 0;
+	} else {
+		count100ms++;
+	}
+	
+	if (count1000ms == 1000) {
+		rate_group_1000ms();
+		count1000ms = 0;
+	} else {
+		count100ms++;
+	}
+	
+	HAL_Delay(1);
 }
 
 /* USER CODE END 0 */
@@ -301,27 +386,13 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	
-	int gyro_ok = config_gyro();
-	
-	int16_t rot_x;
-	int16_t rot_y;
+	gyro_ok = config_gyro();
 	
   while (1)
   {
     /* USER CODE END WHILE */
 		
-		if (gyro_ok) {
-			toggle_green();
-			get_gyro_data(&rot_x, &rot_y);
-			if (rot_x != 0) {
-				toggle_blue();
-			}
-		} else {
-			toggle_red();
-		}
-		
-		
-		HAL_Delay(250);
+		handle_rate_groups();
 
     /* USER CODE BEGIN 3 */
   }
