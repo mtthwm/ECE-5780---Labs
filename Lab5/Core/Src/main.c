@@ -107,17 +107,18 @@ void toggle_green () {
 #define GYRO_OUT_Y_L_REG 0x2A
 #define GYRO_OUT_Y_H_REG 0x2B
 
-int i2c_write (char follower, int num_bytes, char* data) {
-	// Prepare a write operation
-	I2C2->CR2 |= (follower << (I2C_CR2_SADD_Pos + 1)); // Select follower address
-	I2C2->CR2 |= (num_bytes << I2C_CR2_NBYTES_Pos); // Set the number of bytes
-	I2C2->CR2 &= ~I2C_CR2_RD_WRN; // Set to write mode
-	I2C2->CR2 |= I2C_CR2_START; // Start the transaction
-	
-	for (int i = 0; i < num_bytes; i++) {
+#define MAX_ITERATIONS 100
+
+char i2c_write (char follower, char num_bytes, char* data) {
+	for (char i = 0; i < num_bytes; i++) {
+		I2C2->CR2 &= ~I2C_CR2_RD_WRN; // Set to write mode
+		I2C2->CR2 |= (follower << (I2C_CR2_SADD_Pos + 1)); // Select follower address
+		I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos); // Set the number of bytes
+		I2C2->CR2 |= I2C_CR2_START; // Start the transaction
+		
 		// Wait until we get either a NACK or a confirmation
 		while (1) {
-			if (I2C2->ISR & I2C_ISR_TXIS) {
+			if (I2C2->ISR & I2C_ISR_TXE) {
 				break;
 			}
 			if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
@@ -128,38 +129,49 @@ int i2c_write (char follower, int num_bytes, char* data) {
 	
 		// Input data to send
 		I2C2->TXDR = data[i];
-	}
-	
-	// Wait until we receive confirmation that the data was sent.
-	while (1) {
-		if (I2C2->ISR & I2C_ISR_TC) {
-			break;
+			
+		// Wait until we receive confirmation that the data was sent.
+		while (1) {
+			if (I2C2->ISR & I2C_ISR_TC) {
+				break;
+			}
+			HAL_Delay(1);
 		}
-		HAL_Delay(1);
 	}
-	
 	return 1;
 }
 
-uint32_t i2c_read (char follower, int num_bytes) {
-	// Prepare a read operation
-	I2C2->CR2 |= (follower << (I2C_CR2_SADD_Pos + 1)); // Select follower address
-	I2C2->CR2 |= (num_bytes << I2C_CR2_NBYTES_Pos); // Set the number of bytes
-	I2C2->CR2 |= I2C_CR2_RD_WRN; // Set to read mode
-	I2C2->CR2 |= I2C_CR2_START; // Start the transaction
-	
-	// Wait until we get either a NACK or a confirmation
-	while (1) {
-		if (I2C2->ISR & I2C_ISR_RXNE) {
-			break;
+char i2c_read (char follower, char num_bytes, char* out) {
+	for (char i = 0; i < num_bytes; i++) {
+		// Prepare a read operation
+		I2C2->CR2 |= (follower << (I2C_CR2_SADD_Pos + 1)); // Select follower address
+		I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos); // Set the number of bytes
+		I2C2->CR2 |= I2C_CR2_RD_WRN; // Set to read mode
+		I2C2->CR2 |= I2C_CR2_START; // Start the transaction
+		
+		// Wait until we get either a NACK or a confirmation
+		int count = 0;
+		while (count++ < MAX_ITERATIONS) {
+			if (I2C2->ISR & I2C_ISR_RXNE) {
+				break;
+			}
+			if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
+				return 0;
+			}
+			HAL_Delay(1);
+		};
+		
+		out[i] = I2C2->RXDR;
+		
+		count = 0;
+		while(count++ < MAX_ITERATIONS) {
+			if (I2C2->ISR & I2C_ISR_TC) {
+				out[i] = I2C2->RXDR;
+			}
 		}
-		if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
-			return 0;
-		}
-		HAL_Delay(1);
-	};
+	}
 	
-	return I2C2->RXDR;
+	return 1;
 }
 
 int config_gyro () {
@@ -172,24 +184,35 @@ int config_gyro () {
 	}
 	
 	// Read the value at the address we just sent. It should be 0xD3
-	uint32_t result = i2c_read(GYRO_ADDR, 1);
-	if (result != 0xD3) {
+	char chip_id;
+	i2c_read(GYRO_ADDR, 1, &chip_id);
+	if (chip_id != 0xD3) {
 		return 0;
 	}
 		
 	// Enable the X and Y axes
 	buff[0] = GYRO_CTRL_REG1;
-	status = i2c_write(GYRO_ADDR, 1, buff);
-	if (!status) {
-		return 0;
-	}
-	buff[0] = 0xF;
-	status = i2c_write(GYRO_ADDR, 1, buff);
+	buff[1] = 0xF;
+	status = i2c_write(GYRO_ADDR, 2, buff);
 	if (!status) {
 		return 0;
 	}
 		
 	return 1;
+}
+
+void get_gyro_data (int16_t* x, int16_t* y) {
+	char buff[1];
+	buff[0] = GYRO_OUT_X_L_REG;
+	i2c_write(GYRO_ADDR, 1, buff);
+	char out_buff[4];
+	char status = i2c_read(GYRO_ADDR, 4, out_buff);
+	if (!status) {
+		toggle_red();
+	}
+	
+	*x = (out_buff[1] << 8) | out_buff[0];
+	*y = (out_buff[3] << 8) | out_buff[2];
 }
 
 /* USER CODE END 0 */
@@ -231,12 +254,6 @@ int main(void)
 	GPIOB->AFR[1] |= (1 << GPIO_AFRH_AFSEL11_Pos); // SDA
 	GPIOB->AFR[1] &= ~GPIO_AFRH_AFSEL13_Msk;
 	GPIOB->AFR[1] |= (5 << GPIO_AFRH_AFSEL13_Pos); // SCL
-	
-	// // Configure Pullup Resistors for SDA and SCL
-	// GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR11_Msk);
-	// GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR13_Msk);
-	// GPIOB->PUPDR |= GPIO_PUPDR_PUPDR11_0;
-	// GPIOB->PUPDR |= GPIO_PUPDR_PUPDR13_0;
 	
 	// Set GPIO PB14 and PC0 to output mode
 	GPIOB->MODER &= ~(GPIO_MODER_MODER14_Msk);
@@ -286,18 +303,25 @@ int main(void)
 	
 	int gyro_ok = config_gyro();
 	
+	int16_t rot_x;
+	int16_t rot_y;
+	
   while (1)
   {
     /* USER CODE END WHILE */
 		
 		if (gyro_ok) {
 			toggle_green();
+			get_gyro_data(&rot_x, &rot_y);
+			if (rot_x != 0) {
+				toggle_blue();
+			}
 		} else {
 			toggle_red();
 		}
 		
 		
-		HAL_Delay(1000);
+		HAL_Delay(250);
 
     /* USER CODE BEGIN 3 */
   }
