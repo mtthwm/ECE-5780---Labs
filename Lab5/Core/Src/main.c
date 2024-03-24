@@ -54,6 +54,20 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+#define GYRO_ADDR 0x69
+#define GYRO_WHO_AM_I_REG 0x0F
+#define GYRO_CTRL_REG1 0x20
+#define GYRO_OUT_X_L_REG 0x28
+#define GYRO_OUT_X_H_REG 0x29
+#define GYRO_OUT_Y_L_REG 0x2A
+#define GYRO_OUT_Y_H_REG 0x2B
+
+#define MAX_ITERATIONS 100
+
+#define TILT_THRESHOLD 0x0FFF
+
+static int gyro_ok;
+
 void config_red () {
 	GPIOC->MODER &= ~(GPIO_MODER_MODER6_Msk);
 	GPIOC->MODER |= GPIO_MODER_MODER6_0;
@@ -139,18 +153,6 @@ void toggle_green (char mode) {
 	}
 }
 
-#define GYRO_ADDR 0x69
-#define GYRO_WHO_AM_I_REG 0x0F
-#define GYRO_CTRL_REG1 0x20
-#define GYRO_OUT_X_L_REG 0x28
-#define GYRO_OUT_X_H_REG 0x29
-#define GYRO_OUT_Y_L_REG 0x2A
-#define GYRO_OUT_Y_H_REG 0x2B
-
-#define MAX_ITERATIONS 100
-
-#define TILT_THRESHOLD 0x0FFF
-
 char i2c_write (char follower, char num_bytes, char* data) {
 	for (char i = 0; i < num_bytes; i++) {
 		I2C2->CR2 &= ~I2C_CR2_RD_WRN; // Set to write mode
@@ -183,37 +185,33 @@ char i2c_write (char follower, char num_bytes, char* data) {
 	return 1;
 }
 
-char i2c_read (char follower, char num_bytes, char* out) {
-	for (char i = 0; i < num_bytes; i++) {
-		// Prepare a read operation
-		I2C2->CR2 |= (follower << (I2C_CR2_SADD_Pos + 1)); // Select follower address
-		I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos); // Set the number of bytes
-		I2C2->CR2 |= I2C_CR2_RD_WRN; // Set to read mode
-		I2C2->CR2 |= I2C_CR2_START; // Start the transaction
+char i2c_read_byte (char follower) {
+	// Prepare a read operation
+	I2C2->CR2 |= (follower << (I2C_CR2_SADD_Pos + 1)); // Select follower address
+	I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos); // Set the number of bytes
+	I2C2->CR2 |= I2C_CR2_RD_WRN; // Set to read mode
+	I2C2->CR2 |= I2C_CR2_START; // Start the transaction
 		
-		// Wait until we get either a NACK or a confirmation
-		int count = 0;
-		while (count++ < MAX_ITERATIONS) {
-			if (I2C2->ISR & I2C_ISR_RXNE) {
-				break;
-			}
-			if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
-				return 0;
-			}
-			HAL_Delay(1);
-		};
+	// Wait until we get either a NACK or a confirmation
+	int count = 0;
+	while (count++ < MAX_ITERATIONS) {
+		if (I2C2->ISR & I2C_ISR_RXNE) {
+			break;
+		}
+		if (I2C2->ISR & I2C_ISR_NACKF_Msk) {
+			return NULL;
+		}
+		HAL_Delay(1);
+	};
 		
-		out[i] = I2C2->RXDR;
-		
-		count = 0;
-		while(count++ < MAX_ITERATIONS) {
-			if (I2C2->ISR & I2C_ISR_TC) {
-				out[i] = I2C2->RXDR;
-			}
+	count = 0;
+	while(count++ < MAX_ITERATIONS) {
+		if (I2C2->ISR & I2C_ISR_TC) {
+			return I2C2->RXDR;
 		}
 	}
-	
-	return 1;
+		
+	return NULL;
 }
 
 int config_gyro () {
@@ -226,8 +224,7 @@ int config_gyro () {
 	}
 	
 	// Read the value at the address we just sent. It should be 0xD3
-	char chip_id;
-	i2c_read(GYRO_ADDR, 1, &chip_id);
+	char chip_id = i2c_read_byte(GYRO_ADDR);
 	if (chip_id != 0xD3) {
 		return 0;
 	}
@@ -247,57 +244,39 @@ void get_gyro_data (int16_t* x, int16_t* y) {
 	char buff[1];
 	buff[0] = GYRO_OUT_X_L_REG;
 	i2c_write(GYRO_ADDR, 1, buff);
-	char out_buff[4];
-	char status = i2c_read(GYRO_ADDR, 4, out_buff);
-	if (!status) {
+	int16_t x_lo = i2c_read_byte(GYRO_ADDR);
+	buff[0] = GYRO_OUT_X_H_REG;
+	i2c_write(GYRO_ADDR, 1, buff);
+	int16_t x_hi = i2c_read_byte(GYRO_ADDR);
+	buff[0] = GYRO_OUT_Y_L_REG;
+	i2c_write(GYRO_ADDR, 1, buff);
+	int16_t y_lo = i2c_read_byte(GYRO_ADDR);
+	buff[0] = GYRO_OUT_Y_H_REG;
+	i2c_write(GYRO_ADDR, 1, buff);
+	int16_t y_hi = i2c_read_byte(GYRO_ADDR);
+	
+	*x = x_hi << 8 | x_lo;
+	*y = y_hi << 8 | y_lo;
+}
+
+void update_leds_from_gyro_data (int16_t rot_x, int16_t rot_y) {
+	get_gyro_data(&rot_x, &rot_y);
+	if (rot_x > TILT_THRESHOLD) {
+		toggle_green(1);
+		toggle_orange(0);
+	}
+	if (rot_x < -TILT_THRESHOLD) {
+		toggle_green(0);
+		toggle_orange(1);
+	}
+	if (rot_y > TILT_THRESHOLD) {
 		toggle_red(1);
+		toggle_blue(0);
 	}
-	
-	*x = (out_buff[1] << 8) | out_buff[0];
-	*y = (out_buff[3] << 8) | out_buff[2];
-}
-
-int gyro_ok;
-	
-int16_t rot_x;
-int16_t rot_y;
-
-void update_leds_from_gyro_data () {
-	if (gyro_ok) {
-		get_gyro_data(&rot_x, &rot_y);
-		if ((rot_x - TILT_THRESHOLD) > 0) {
-			toggle_green(1);
-		}
+	if (rot_y < -TILT_THRESHOLD) {
+		toggle_red(0);
+		toggle_blue(1);
 	}
-}
-
-void rate_group_100ms () {
-	update_leds_from_gyro_data();
-}
-
-void rate_group_1000ms () {
-	toggle_blue(2);
-}
-
-void handle_rate_groups () {
-	static int count100ms = 0;
-	static int count1000ms = 0;
-	
-	if (count100ms == 100) {
-		rate_group_100ms();
-		count100ms = 0;
-	} else {
-		count100ms++;
-	}
-	
-	if (count1000ms == 1000) {
-		rate_group_1000ms();
-		count1000ms = 0;
-	} else {
-		count100ms++;
-	}
-	
-	HAL_Delay(1);
 }
 
 /* USER CODE END 0 */
@@ -388,11 +367,16 @@ int main(void)
 	
 	gyro_ok = config_gyro();
 	
+	int16_t rot_x;
+	int16_t rot_y;
+	
   while (1)
   {
     /* USER CODE END WHILE */
 		
-		handle_rate_groups();
+		update_leds_from_gyro_data(rot_x, rot_y);
+		
+		HAL_Delay(100);
 
     /* USER CODE BEGIN 3 */
   }
