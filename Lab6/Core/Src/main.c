@@ -142,6 +142,8 @@ void toggle_green (char mode) {
 }
 
 void config_adc () {
+	// Set PC0 to analog mode
+	GPIOC->MODER |= 3 << GPIO_MODER_MODER0_Pos;
 	// Enable the clock to the ADC
 	RCC->APB2ENR |= RCC_APB2ENR_ADCEN;
 	// Set ADC1 to 8 bit resolution, continuous conversion mode, hardware triggers disabled.
@@ -164,7 +166,7 @@ void config_adc () {
 	ADC1->CR |= ADC_CR_ADEN;
 	
 	// Wait until the ADC is ready
-	while (!(ADC1->ISR &= ADC_ISR_ADRDY)) {
+	while (!(ADC1->ISR & ADC_ISR_ADRDY)) {
 		HAL_Delay(1);
 	}
 	
@@ -173,6 +175,26 @@ void config_adc () {
 	// Signal that we are ready for conversion
 	ADC1->CR |= ADC_CR_ADSTART;
 }
+
+void config_dac () {
+	RCC->APB1ENR |= RCC_APB1ENR_DACEN;
+	GPIOA->MODER |= 3 << GPIO_MODER_MODER4_Pos;
+	GPIOA->PUPDR &= ~GPIO_PUPDR_PUPDR4_Msk;
+	
+	DAC1->SWTRIGR |= DAC_SWTRIGR_SWTRIG1;
+	DAC1->CR |= DAC_CR_EN1;
+}
+
+// Sine Wave: 8-bit, 32 samples/cycle
+const uint8_t sine_table[32] = {127,151,175,197,216,232,244,251,254,251,244,
+232,216,197,175,151,127,102,78,56,37,21,9,2,0,2,9,21,37,56,78,102};
+// Triangle Wave: 8-bit, 32 samples/cycle
+const uint8_t triangle_table[32] = {0,15,31,47,63,79,95,111,127,142,158,174,
+190,206,222,238,254,238,222,206,190,174,158,142,127,111,95,79,63,47,31,15};
+// Sawtooth Wave: 8-bit, 32 samples/cycle
+const uint8_t sawtooth_table[32] = {0,7,15,23,31,39,47,55,63,71,79,87,95,103,
+111,119,127,134,142,150,158,166,174,182,190,198,206,214,222,230,238,246};
+
 
 /* USER CODE END 0 */
 
@@ -207,15 +229,14 @@ int main(void)
 	
 		// Enable clocks to GPIOC, ADC1.
 		RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
-		
-		// Set PC0 to analog mode
-		GPIOC->MODER |= 3 << GPIO_MODER_MODER0_Pos;
+		RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
 	
 		config_red();
 		config_green();
 		config_blue();
 		config_orange();
 		config_adc();
+		config_dac();
 
   /* USER CODE END 2 */
 
@@ -227,6 +248,8 @@ int main(void)
 	#define ORANGE_THRESHOLD 192
 	
 	uint16_t pot = 0;
+	
+	int wave_index = 0;
 	
   while (1)
   {
@@ -254,6 +277,9 @@ int main(void)
 		} else {
 			toggle_blue(0);
 		}
+		
+		DAC->DHR8R1 = sawtooth_table[wave_index];
+		wave_index = (wave_index + 1) % 32;
 		
 		HAL_Delay(1);
 
