@@ -154,9 +154,7 @@ void config_adc () {
 	ADC1->CHSELR |= ADC_CHSELR_CHSEL10;
 	// Start calibration
 	ADC1->CR |= ADC_CR_ADCAL;
-	
-	toggle_orange(2);
-	
+		
 	// Wait until the calibration bit is reset.
 	while (ADC1->CR & ADC_CR_ADCAL_Msk) {
 		HAL_Delay(1);
@@ -169,19 +167,22 @@ void config_adc () {
 	while (!(ADC1->ISR & ADC_ISR_ADRDY)) {
 		HAL_Delay(1);
 	}
-	
-	toggle_orange(2);
-	
+		
 	// Signal that we are ready for conversion
 	ADC1->CR |= ADC_CR_ADSTART;
 }
 
 void config_dac () {
+	// Enable the clock to the DAC
 	RCC->APB1ENR |= RCC_APB1ENR_DACEN;
+	// Set GPIOA pin 4 to analog mode
 	GPIOA->MODER |= 3 << GPIO_MODER_MODER4_Pos;
+	// Set GPIOA pin 4 to use no pull up or pull down resistors
 	GPIOA->PUPDR &= ~GPIO_PUPDR_PUPDR4_Msk;
 	
+	// Set DAC channel one to use software trigger
 	DAC1->SWTRIGR |= DAC_SWTRIGR_SWTRIG1;
+	// Enable DAC channel one
 	DAC1->CR |= DAC_CR_EN1;
 }
 
