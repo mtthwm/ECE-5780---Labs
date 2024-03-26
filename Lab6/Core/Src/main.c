@@ -54,6 +54,8 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+#define MAX_ITERATIONS 100
+
 void config_red () {
 	GPIOC->MODER &= ~(GPIO_MODER_MODER6_Msk);
 	GPIOC->MODER |= GPIO_MODER_MODER6_0;
@@ -139,6 +141,39 @@ void toggle_green (char mode) {
 	}
 }
 
+void config_adc () {
+	// Enable the clock to the ADC
+	RCC->APB2ENR |= RCC_APB2ENR_ADCEN;
+	// Set ADC1 to 8 bit resolution, continuous conversion mode, hardware triggers disabled.
+	ADC1->CFGR1 |= 2 << ADC_CFGR1_RES_Pos;
+	ADC1->CFGR1 |= ADC_CFGR1_CONT;
+	ADC1->CFGR1 &= ~ADC_CFGR1_ALIGN_Msk;
+	// Set ADC1 to use channel 10 (ADC_IN10 additional function)
+	ADC1->CHSELR |= ADC_CHSELR_CHSEL10;
+	// Start calibration
+	ADC1->CR |= ADC_CR_ADCAL;
+	
+	toggle_orange(2);
+	
+	// Wait until the calibration bit is reset.
+	while (ADC1->CR & ADC_CR_ADCAL_Msk) {
+		HAL_Delay(1);
+	}
+	
+	// Enable the ADC
+	ADC1->CR |= ADC_CR_ADEN;
+	
+	// Wait until the ADC is ready
+	while (!(ADC1->ISR &= ADC_ISR_ADRDY)) {
+		HAL_Delay(1);
+	}
+	
+	toggle_orange(2);
+	
+	// Signal that we are ready for conversion
+	ADC1->CR |= ADC_CR_ADSTART;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -157,7 +192,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+	
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -169,14 +204,58 @@ int main(void)
 
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
+	
+		// Enable clocks to GPIOC, ADC1.
+		RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
+		
+		// Set PC0 to analog mode
+		GPIOC->MODER |= 3 << GPIO_MODER_MODER0_Pos;
+	
+		config_red();
+		config_green();
+		config_blue();
+		config_orange();
+		config_adc();
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	#define RED_THRESHOLD 0
+	#define GREEN_THRESHOLD 64
+	#define BLUE_THRESHOLD 128
+	#define ORANGE_THRESHOLD 192
+	
+	uint16_t pot = 0;
+	
   while (1)
   {
     /* USER CODE END WHILE */
+		
+		pot = ADC1->DR;
+		
+		if (pot > RED_THRESHOLD) {
+			toggle_red(1);
+		} else {
+			toggle_red(0);
+		}
+		if (pot > GREEN_THRESHOLD) {
+			toggle_green(1);
+		} else {
+			toggle_green(0);
+		}
+		if (pot > ORANGE_THRESHOLD) {
+			toggle_orange(1);
+		} else {
+			toggle_orange(0);
+		}
+		if (pot > BLUE_THRESHOLD) {
+			toggle_blue(1);
+		} else {
+			toggle_blue(0);
+		}
+		
+		HAL_Delay(1);
 
     /* USER CODE BEGIN 3 */
   }
